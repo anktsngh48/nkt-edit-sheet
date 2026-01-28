@@ -5,16 +5,58 @@
 <title>NKT Data Manager</title>
 
 <style>
-body { font-family: Arial; margin: 10px; }
-.sheet-bar { display: flex; gap: 6px; margin-bottom: 8px; }
-input { flex: 1; padding: 8px; font-size: 15px; }
-button { padding: 8px 10px; }
-select { width: 100%; padding: 8px; margin-bottom: 8px; }
+body {
+  font-family: Arial;
+  margin: 10px;
+}
 
-.actions { display: flex; gap: 8px; margin-bottom: 8px; }
+/* Top input bar */
+.sheet-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
 
-td { border: 1px solid #ccc; padding: 8px; min-width: 80px; }
-td input { width: 100%; border: none; padding: 8px; }
+input, select, button {
+  font-size: 15px;
+  padding: 8px;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Action buttons */
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* ⭐ CELL UI – KEEP FOR ALL VERSIONS ⭐
+   This is what makes cells look clean & beautiful */
+td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  min-width: 90px;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+/* Active edit state */
+td input {
+  width: 100%;
+  border: none;
+  background: #fff;
+  padding: 8px;
+  font-size: 15px;
+  outline: none;
+}
+
+/* Table spacing */
+table {
+  border-spacing: 6px;
+}
 </style>
 </head>
 
@@ -25,7 +67,10 @@ td input { width: 100%; border: none; padding: 8px; }
   <button id="clearBtn">✕</button>
 </div>
 
-<select id="tabs"></select>
+<!-- Tabs container -->
+<div id="tabContainer">
+  <select id="tabs"></select>
+</div>
 
 <div class="actions">
   <button onclick="addRow()">+ Row</button>
@@ -36,11 +81,12 @@ td input { width: 100%; border: none; padding: 8px; }
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6KQcF2LsQR3q_xdDO4GR5M_weIYzrYvM8d1rD4Ep93SpuqZcwMNStGqhkdvPkBaj9/exec';
-const STORAGE_KEY = 'nkt_sheet_v21';
+const STORAGE_KEY = 'nkt_sheet_v22';
 
 const sheetInput = document.getElementById('sheetInput');
 const clearBtn = document.getElementById('clearBtn');
 const tabs = document.getElementById('tabs');
+const tabContainer = document.getElementById('tabContainer');
 const grid = document.getElementById('grid');
 
 let sheetId = '';
@@ -74,7 +120,9 @@ async function loadTabs() {
 
 /* -------- Data -------- */
 async function loadData() {
-  if (tabs.value === '__add__') return startInlineAddSheet();
+  if (tabs.value === '__add__') {
+    return showInlineAddTab();
+  }
 
   currentTab = tabs.value;
   const r = await fetch(`${SCRIPT_URL}?action=data&sheetId=${sheetId}&tab=${currentTab}`);
@@ -96,7 +144,7 @@ function render(values) {
   });
 }
 
-/* -------- Inline Edit Cell -------- */
+/* -------- Inline Cell Edit -------- */
 function editCell(td, row, col) {
   if (editing) return;
   editing = true;
@@ -123,21 +171,37 @@ function editCell(td, row, col) {
   };
 }
 
-/* -------- Inline Add Sheet -------- */
-function startInlineAddSheet() {
-  tabs.selectedIndex = tabs.options.length - 1;
-  const name = prompt(''); // Mobile forces keyboard open
+/* -------- INLINE Add New Page (NO POPUP) -------- */
+function showInlineAddTab() {
+  tabContainer.innerHTML = `
+    <input id="newTabName" placeholder="New page name">
+  `;
 
-  if (!name) return loadTabs();
+  const input = document.getElementById('newTabName');
+  input.focus();
 
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'addSheet',
-      sheetId,
-      name
-    })
-  }).then(loadTabs);
+  input.onkeydown = async (e) => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'addSheet',
+          sheetId,
+          name: input.value.trim()
+        })
+      });
+      restoreTabs();
+    }
+  };
+
+  input.onblur = restoreTabs;
+}
+
+function restoreTabs() {
+  tabContainer.innerHTML = `<select id="tabs"></select>`;
+  window.tabs = document.getElementById('tabs');
+  tabs.onchange = loadData;
+  loadTabs();
 }
 
 /* -------- Row / Column -------- */
@@ -174,7 +238,7 @@ clearBtn.onclick = () => {
   sheetInput.value = '';
   sheetInput.readOnly = false;
   grid.innerHTML = '';
-  tabs.innerHTML = '';
+  tabContainer.innerHTML = `<select id="tabs"></select>`;
 };
 
 /* -------- Auto Load -------- */
@@ -190,8 +254,6 @@ window.onload = async () => {
   sheetInput.readOnly = true;
   loadTabs();
 };
-
-tabs.onchange = loadData;
 </script>
 
 </body>

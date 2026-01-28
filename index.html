@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NKT Data Manager – V2</title>
+
+<style>
+  body { font-family: Arial; margin: 10px; }
+
+  .sheet-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  input {
+    flex: 1;
+    padding: 8px;
+    font-size: 15px;
+  }
+
+  button {
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  select {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  td {
+    border: 1px solid #ccc;
+    padding: 8px;
+    min-width: 80px;
+  }
+
+  td.editing { padding: 0; }
+  td input {
+    width: 100%;
+    border: none;
+    padding: 8px;
+  }
+</style>
+</head>
+
+<body>
+
+<div class="sheet-bar">
+  <input id="sheetInput" placeholder="Paste Google Sheet URL">
+  <button id="clearBtn">✕</button>
+</div>
+
+<select id="tabs"></select>
+
+<div class="actions">
+  <button onclick="addRow()">+ Row</button>
+  <button onclick="addColumn()">+ Column</button>
+</div>
+
+<table id="grid"></table>
+
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwezEBBm6-YNnBNmvfs8nMsTcnlnHr6qqnVVcc6dlUDlma7VDSuy8Jh2uanQVjKY0dc/exec';
+const STORAGE_KEY = 'nkt_sheet_v2';
+
+const sheetInput = document.getElementById('sheetInput');
+const clearBtn = document.getElementById('clearBtn');
+const tabs = document.getElementById('tabs');
+const grid = document.getElementById('grid');
+
+let sheetId = '';
+let currentTab = '';
+let editing = false;
+
+/* ---------- Helpers ---------- */
+function extractSheetId(url) {
+  const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  return m ? m[1] : '';
+}
+
+/* ---------- Load Sheet ---------- */
+async function loadTabs() {
+  const res = await fetch(`${SCRIPT_URL}?action=tabs&sheetId=${sheetId}`);
+  const data = await res.json();
+
+  tabs.innerHTML = '';
+  data.sheets.forEach(s => tabs.add(new Option(s, s)));
+  tabs.add(new Option('+ Add new page', '__add__'));
+
+  currentTab = tabs.value;
+  loadData();
+}
+
+async function loadData() {
+  if (tabs.value === '__add__') {
+    const name = prompt('New sheet name');
+    if (!name) return;
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'addSheet', sheetId, name })
+    });
+    loadTabs();
+    return;
+  }
+
+  currentTab = tabs.value;
+  const res = await fetch(`${SCRIPT_URL}?action=data&sheetId=${sheetId}&tab=${currentTab}`);
+  const data = await res.json();
+  render(data.values);
+}
+
+/* ---------- Render ---------- */
+function render(values) {
+  grid.innerHTML = '';
+  values.forEach((r, ri) => {
+    const tr = document.createElement('tr');
+    r.forEach((c, ci) => {
+      const td = document.createElement('td');
+      td.textContent = c ?? '';
+      td.onclick = () => editCell(td, ri + 1, ci + 1);
+      tr.appendChild(td);
+    });
+    grid.appendChild(tr);
+  });
+}
+
+/* ---------- Inline Edit ---------- */
+function editCell(td, row, col) {
+  if (editing) return;
+  editing = true;
+
+  const old = td.textContent;
+  td.innerHTML = `<input value="${old}">`;
+  const input = td.firstChild;
+  input.focus();
+
+  input.onblur = async () => {
+    td.textContent = input.value;
+    editing = false;
+
+    if (input.value !== old) {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'updateCell',
+          sheetId,
+          tab: currentTab,
+          row,
+          col,
+          value: input.value
+        })
+      });
+    }
+  };
+}
+
+/* ---------- Row / Column ---------- */
+async function addRow() {
+  await fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'addRow', sheetId, tab: currentTab })
+  });
+  loadData();
+}
+
+async function addColumn() {
+  await fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'addColumn', sheetId, tab: currentTab })
+  });
+  loadData();
+}
+
+/* ---------- Input Handling ---------- */
+sheetInput.onchange = () => {
+  sheetId = extractSheetId(sheetInput.value);
+  if (!sheetId) return alert('Invalid Sheet URL');
+  localStorage.setItem(STORAGE_KEY, sheetInput.value);
+  loadTabs();
+};
+
+clearBtn.onclick = () => {
+  localStorage.removeItem(STORAGE_KEY);
+  sheetInput.value = '';
+  grid.innerHTML = '';
+  tabs.innerHTML = '';
+};
+
+/* ---------- Auto Load ---------- */
+window.onload = () => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    sheetInput.value = saved;
+    sheetId = extractSheetId(saved);
+    loadTabs();
+  }
+};
+
+tabs.onchange = loadData;
+</script>
+
+</body>
+</html>

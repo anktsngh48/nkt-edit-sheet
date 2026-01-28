@@ -5,48 +5,102 @@
 <title>NKT Data Manager</title>
 
 <style>
+:root {
+  --primary: #1a9c5a;
+  --primary-light: #e7f5ee;
+  --border: #d9d9d9;
+  --bg: #f4f6f8;
+  --text: #222;
+}
+
 body {
-  font-family: Arial;
-  margin: 10px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, Arial;
+  margin: 0;
+  padding: 12px;
   height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
 }
 
-/* Header */
+/* ===============================
+   TOP BAR
+   =============================== */
 .sheet-bar {
   display: flex;
   gap: 6px;
   margin-bottom: 8px;
 }
 
-input {
+.sheet-bar input {
   flex: 1;
-  padding: 8px;
+  padding: 10px;
+  font-size: 15px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: white;
+}
+
+.sheet-bar button {
+  background: #eee;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  padding: 0 12px;
+}
+
+/* ===============================
+   DROPDOWN
+   =============================== */
+select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: white;
   font-size: 15px;
 }
 
-button {
-  padding: 8px 10px;
-}
-
-select {
-  width: 100%;
-  padding: 8px;
-  margin-bottom: 8px;
-}
-
+/* ===============================
+   ACTION BUTTONS
+   =============================== */
 .actions {
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
 }
 
-/* Table scroll */
+.actions button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: white;
+  font-size: 14px;
+}
+
+.actions button:last-child {
+  background: var(--primary);
+  color: white;
+  border: none;
+}
+
+.actions button:disabled {
+  opacity: 0.5;
+}
+
+/* ===============================
+   TABLE CONTAINER
+   =============================== */
 .table-wrapper {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #ddd;
+  background: white;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 4px;
 }
 
 /* ===============================
@@ -55,14 +109,20 @@ select {
 table {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 1pt;
+  border-spacing: 1pt; /* 👈 cell gap */
 }
 
 td {
-  border: 1px solid #ccc;
+  border: 1px solid var(--border);
   padding: 12px;
   min-width: 80px;
   font-size: 14px;
+  background: #fff;
+  border-radius: 6px;
+}
+
+td:active {
+  background: var(--primary-light);
 }
 
 td input {
@@ -70,6 +130,8 @@ td input {
   border: none;
   padding: 12px;
   font-size: 14px;
+  outline: none;
+  background: transparent;
 }
 </style>
 </head>
@@ -84,8 +146,8 @@ td input {
 <select id="tabs"></select>
 
 <div class="actions">
-  <button onclick="addRow()">+ Row</button>
-  <button onclick="addColumn()">+ Column</button>
+  <button onclick="addRow()">＋ Row</button>
+  <button onclick="addColumn()">＋ Column</button>
   <button id="undoBtn" onclick="undo()" disabled>Undo</button>
 </div>
 
@@ -108,7 +170,6 @@ let sheetUrl = '';
 let currentTab = '';
 let editing = false;
 
-/* 🔁 MULTI-LEVEL UNDO STACK */
 const undoStack = [];
 
 /* Helpers */
@@ -166,9 +227,7 @@ function render(values) {
   });
 }
 
-/* ===============================
-   INLINE EDIT + UNDO STACK
-   =============================== */
+/* Inline edit */
 function editCell(td, row, col) {
   if (editing) return;
   editing = true;
@@ -188,13 +247,7 @@ function editCell(td, row, col) {
     editing = false;
 
     if (val !== old) {
-      undoStack.push({
-        tab: currentTab,
-        row,
-        col,
-        value: old
-      });
-
+      undoStack.push({ tab: currentTab, row, col, value: old });
       undoBtn.disabled = false;
 
       await fetch(SCRIPT_URL, {
@@ -212,12 +265,11 @@ function editCell(td, row, col) {
   };
 }
 
-/* 🔁 MULTI-LEVEL UNDO */
+/* Undo */
 async function undo() {
   if (!undoStack.length) return;
 
   const last = undoStack.pop();
-
   await fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify({
@@ -230,7 +282,7 @@ async function undo() {
     })
   });
 
-  if (!undoStack.length) undoBtn.disabled = true;
+  undoBtn.disabled = !undoStack.length;
   loadData();
 }
 

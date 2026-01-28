@@ -14,13 +14,13 @@ select { width: 100%; padding: 8px; margin-bottom: 8px; }
 
 .actions { display: flex; gap: 8px; margin-bottom: 8px; }
 
-/* ===============================
-   CELL UI — DO NOT CHANGE (LOCKED)
-   =============================== */
+/* =================================================
+   CELL UI — FINAL & LOCKED (RESTORED FROM V2.1)
+   DO NOT MODIFY IN FUTURE VERSIONS
+   ================================================= */
 .table-wrap {
   height: calc(100vh - 180px);
   overflow: auto;
-  border: 1px solid #ddd;
 }
 
 table {
@@ -41,7 +41,7 @@ td input {
   padding: 10px;
   font-size: 14px;
 }
-/* =============================== */
+/* ================================================= */
 
 </style>
 </head>
@@ -49,7 +49,8 @@ td input {
 <body>
 
 <div class="sheet-bar">
-  <input id="sheetInput" placeholder="Paste Google Sheet URL">
+  <input id="sheetInput" list="history" placeholder="Paste Google Sheet URL">
+  <datalist id="history"></datalist>
   <button id="clearBtn">✕</button>
 </div>
 
@@ -65,13 +66,15 @@ td input {
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytZYH_IetZXnLBtp6uVkK6wXN-1d3tnz1wwPDcbJ3Owo7ppkHRxJ1ntqCGdzcKdbuG/exec';
-const STORAGE_KEY = 'nkt_sheet_v22';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz3ygm24PsUB7-Y5MRwCEFV4OGFQaqCz-cfJxdwiIqhqjSVg3XMm2Gx-E5xPqlaork/exec';
+const STORAGE_KEY = 'nkt_current_sheet';
+const HISTORY_KEY = 'nkt_sheet_history';
 
 const sheetInput = document.getElementById('sheetInput');
 const clearBtn = document.getElementById('clearBtn');
 const tabs = document.getElementById('tabs');
 const grid = document.getElementById('grid');
+const history = document.getElementById('history');
 
 let sheetId = '';
 let sheetUrl = '';
@@ -83,12 +86,30 @@ function extractSheetId(url) {
   return m ? m[1] : '';
 }
 
+/* -------- History -------- */
+function saveHistory(name, url) {
+  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+  h[name] = url;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+  renderHistory();
+}
+
+function renderHistory() {
+  history.innerHTML = '';
+  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+  Object.keys(h).forEach(name => {
+    const o = document.createElement('option');
+    o.value = name;
+    history.appendChild(o);
+  });
+}
+
 async function loadSheetName() {
   const r = await fetch(`${SCRIPT_URL}?action=info&sheetId=${sheetId}`);
   return (await r.json()).name;
 }
 
-async function loadTabs() {
+async function loadTabs(selectTab = null) {
   const r = await fetch(`${SCRIPT_URL}?action=tabs&sheetId=${sheetId}`);
   const data = await r.json();
 
@@ -96,16 +117,18 @@ async function loadTabs() {
   data.sheets.forEach(s => tabs.add(new Option(s, s)));
   tabs.add(new Option('+ Add new page', '__add__'));
 
+  tabs.value = selectTab || data.sheets[0];
   loadData();
 }
 
 async function loadData() {
   if (tabs.value === '__add__') {
-    await fetch(SCRIPT_URL, {
+    const r = await fetch(SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ action: 'addSheet', sheetId })
     });
-    return loadTabs();
+    const res = await r.json();
+    return loadTabs(res.name);
   }
 
   currentTab = tabs.value;
@@ -145,10 +168,7 @@ function editCell(td, row, col) {
         method: 'POST',
         body: JSON.stringify({
           action: 'updateCell',
-          sheetId,
-          tab: currentTab,
-          row,
-          col,
+          sheetId, tab: currentTab, row, col,
           value: input.value
         })
       });
@@ -170,15 +190,23 @@ function addColumn() {
   }).then(loadData);
 }
 
+/* -------- Input -------- */
 sheetInput.onchange = async () => {
-  sheetUrl = sheetInput.value;
+  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+  if (h[sheetInput.value]) {
+    sheetUrl = h[sheetInput.value];
+  } else {
+    sheetUrl = sheetInput.value;
+  }
+
   sheetId = extractSheetId(sheetUrl);
-  if (!sheetId) return alert('Invalid URL');
+  if (!sheetId) return;
 
   const name = await loadSheetName();
   sheetInput.value = name;
   sheetInput.readOnly = true;
 
+  saveHistory(name, sheetUrl);
   localStorage.setItem(STORAGE_KEY, sheetUrl);
   loadTabs();
 };
@@ -189,9 +217,11 @@ clearBtn.onclick = () => {
   sheetInput.readOnly = false;
   grid.innerHTML = '';
   tabs.innerHTML = '';
+  renderHistory();
 };
 
 window.onload = async () => {
+  renderHistory();
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return;
 

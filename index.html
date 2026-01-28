@@ -54,8 +54,8 @@ select {
    =============================== */
 table {
   width: 100%;
-  border-collapse: separate;     /* REQUIRED for spacing */
-  border-spacing: 1pt;           /* 👈 2pt GAP BETWEEN CELLS */
+  border-collapse: separate;
+  border-spacing: 1pt; /* 👈 cell gap */
 }
 
 td {
@@ -86,6 +86,7 @@ td input {
 <div class="actions">
   <button onclick="addRow()">+ Row</button>
   <button onclick="addColumn()">+ Column</button>
+  <button id="undoBtn" onclick="undo()" disabled>Undo</button>
 </div>
 
 <div class="table-wrapper">
@@ -93,18 +94,22 @@ td input {
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwmCajpS6Og9doaM786vdVuj8oUNvcD3OSjPTR0qqNLZofaOxKFaOni1fCEySxrWQCV/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQ398qBWKjrRnFfvpVw0iWfRDkD3w3vBmfpbFvma2m8qlDVLeQ3AWm09o7fDaQk1_G/exec';
 const STORAGE_KEY = 'nkt_sheet';
 
 const sheetInput = document.getElementById('sheetInput');
 const clearBtn = document.getElementById('clearBtn');
 const tabs = document.getElementById('tabs');
 const grid = document.getElementById('grid');
+const undoBtn = document.getElementById('undoBtn');
 
 let sheetId = '';
 let sheetUrl = '';
 let currentTab = '';
 let editing = false;
+
+/* Undo stack (single level) */
+let lastEdit = null;
 
 /* Helpers */
 function extractSheetId(url) {
@@ -172,10 +177,14 @@ function editCell(td, row, col) {
   input.focus();
 
   input.onblur = async () => {
-    td.textContent = input.value;
+    const val = input.value;
+    td.textContent = val;
     editing = false;
 
-    if (input.value !== old) {
+    if (val !== old) {
+      lastEdit = { tab: currentTab, row, col, old };
+      undoBtn.disabled = false;
+
       await fetch(SCRIPT_URL, {
         method: 'POST',
         body: JSON.stringify({
@@ -184,11 +193,32 @@ function editCell(td, row, col) {
           tab: currentTab,
           row,
           col,
-          value: input.value
+          value: val
         })
       });
     }
   };
+}
+
+/* Undo */
+async function undo() {
+  if (!lastEdit) return;
+
+  await fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'undoCell',
+      sheetId,
+      tab: lastEdit.tab,
+      row: lastEdit.row,
+      col: lastEdit.col,
+      value: lastEdit.old
+    })
+  });
+
+  undoBtn.disabled = true;
+  lastEdit = null;
+  loadData();
 }
 
 /* Row / Column */

@@ -1,59 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NKT Data Manager – V2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NKT Data Manager</title>
 
 <style>
-  body { font-family: Arial; margin: 10px; }
+body { font-family: Arial; margin: 10px; }
+.sheet-bar { display: flex; gap: 6px; margin-bottom: 8px; }
+input { flex: 1; padding: 8px; font-size: 15px; }
+button { padding: 8px 10px; }
+select { width: 100%; padding: 8px; margin-bottom: 8px; }
 
-  .sheet-bar {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 8px;
-  }
+.actions { display: flex; gap: 8px; margin-bottom: 8px; }
 
-  input {
-    flex: 1;
-    padding: 8px;
-    font-size: 15px;
-  }
-
-  button {
-    padding: 8px 10px;
-    font-size: 14px;
-  }
-
-  select {
-    width: 100%;
-    padding: 8px;
-    margin-bottom: 8px;
-  }
-
-  .actions {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  table {
-    border-collapse: collapse;
-    width: 100%;
-  }
-
-  td {
-    border: 1px solid #ccc;
-    padding: 8px;
-    min-width: 80px;
-  }
-
-  td.editing { padding: 0; }
-  td input {
-    width: 100%;
-    border: none;
-    padding: 8px;
-  }
+td { border: 1px solid #ccc; padding: 8px; min-width: 80px; }
+td input { width: 100%; border: none; padding: 8px; }
 </style>
 </head>
 
@@ -74,8 +35,8 @@
 <table id="grid"></table>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwezEBBm6-YNnBNmvfs8nMsTcnlnHr6qqnVVcc6dlUDlma7VDSuy8Jh2uanQVjKY0dc/exec';
-const STORAGE_KEY = 'nkt_sheet_v2';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6KQcF2LsQR3q_xdDO4GR5M_weIYzrYvM8d1rD4Ep93SpuqZcwMNStGqhkdvPkBaj9/exec';
+const STORAGE_KEY = 'nkt_sheet_v21';
 
 const sheetInput = document.getElementById('sheetInput');
 const clearBtn = document.getElementById('clearBtn');
@@ -83,47 +44,44 @@ const tabs = document.getElementById('tabs');
 const grid = document.getElementById('grid');
 
 let sheetId = '';
+let sheetUrl = '';
 let currentTab = '';
 let editing = false;
 
-/* ---------- Helpers ---------- */
+/* -------- Helpers -------- */
 function extractSheetId(url) {
   const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
   return m ? m[1] : '';
 }
 
-/* ---------- Load Sheet ---------- */
+/* -------- Sheet Name -------- */
+async function loadSheetName() {
+  const r = await fetch(`${SCRIPT_URL}?action=info&sheetId=${sheetId}`);
+  return (await r.json()).name;
+}
+
+/* -------- Tabs -------- */
 async function loadTabs() {
-  const res = await fetch(`${SCRIPT_URL}?action=tabs&sheetId=${sheetId}`);
-  const data = await res.json();
+  const r = await fetch(`${SCRIPT_URL}?action=tabs&sheetId=${sheetId}`);
+  const data = await r.json();
 
   tabs.innerHTML = '';
   data.sheets.forEach(s => tabs.add(new Option(s, s)));
   tabs.add(new Option('+ Add new page', '__add__'));
 
-  currentTab = tabs.value;
   loadData();
 }
 
+/* -------- Data -------- */
 async function loadData() {
-  if (tabs.value === '__add__') {
-    const name = prompt('New sheet name');
-    if (!name) return;
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      body: JSON.stringify({ action: 'addSheet', sheetId, name })
-    });
-    loadTabs();
-    return;
-  }
+  if (tabs.value === '__add__') return startInlineAddSheet();
 
   currentTab = tabs.value;
-  const res = await fetch(`${SCRIPT_URL}?action=data&sheetId=${sheetId}&tab=${currentTab}`);
-  const data = await res.json();
-  render(data.values);
+  const r = await fetch(`${SCRIPT_URL}?action=data&sheetId=${sheetId}&tab=${currentTab}`);
+  render((await r.json()).values);
 }
 
-/* ---------- Render ---------- */
+/* -------- Render -------- */
 function render(values) {
   grid.innerHTML = '';
   values.forEach((r, ri) => {
@@ -138,7 +96,7 @@ function render(values) {
   });
 }
 
-/* ---------- Inline Edit ---------- */
+/* -------- Inline Edit Cell -------- */
 function editCell(td, row, col) {
   if (editing) return;
   editing = true;
@@ -157,57 +115,80 @@ function editCell(td, row, col) {
         method: 'POST',
         body: JSON.stringify({
           action: 'updateCell',
-          sheetId,
-          tab: currentTab,
-          row,
-          col,
-          value: input.value
+          sheetId, tab: currentTab,
+          row, col, value: input.value
         })
       });
     }
   };
 }
 
-/* ---------- Row / Column ---------- */
-async function addRow() {
-  await fetch(SCRIPT_URL, {
+/* -------- Inline Add Sheet -------- */
+function startInlineAddSheet() {
+  tabs.selectedIndex = tabs.options.length - 1;
+  const name = prompt(''); // Mobile forces keyboard open
+
+  if (!name) return loadTabs();
+
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({
+      action: 'addSheet',
+      sheetId,
+      name
+    })
+  }).then(loadTabs);
+}
+
+/* -------- Row / Column -------- */
+function addRow() {
+  fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify({ action: 'addRow', sheetId, tab: currentTab })
-  });
-  loadData();
+  }).then(loadData);
 }
 
-async function addColumn() {
-  await fetch(SCRIPT_URL, {
+function addColumn() {
+  fetch(SCRIPT_URL, {
     method: 'POST',
     body: JSON.stringify({ action: 'addColumn', sheetId, tab: currentTab })
-  });
-  loadData();
+  }).then(loadData);
 }
 
-/* ---------- Input Handling ---------- */
-sheetInput.onchange = () => {
-  sheetId = extractSheetId(sheetInput.value);
-  if (!sheetId) return alert('Invalid Sheet URL');
-  localStorage.setItem(STORAGE_KEY, sheetInput.value);
+/* -------- Input -------- */
+sheetInput.onchange = async () => {
+  sheetUrl = sheetInput.value;
+  sheetId = extractSheetId(sheetUrl);
+  if (!sheetId) return alert('Invalid URL');
+
+  const name = await loadSheetName();
+  sheetInput.value = name;
+  sheetInput.readOnly = true;
+
+  localStorage.setItem(STORAGE_KEY, sheetUrl);
   loadTabs();
 };
 
 clearBtn.onclick = () => {
   localStorage.removeItem(STORAGE_KEY);
   sheetInput.value = '';
+  sheetInput.readOnly = false;
   grid.innerHTML = '';
   tabs.innerHTML = '';
 };
 
-/* ---------- Auto Load ---------- */
-window.onload = () => {
+/* -------- Auto Load -------- */
+window.onload = async () => {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    sheetInput.value = saved;
-    sheetId = extractSheetId(saved);
-    loadTabs();
-  }
+  if (!saved) return;
+
+  sheetUrl = saved;
+  sheetId = extractSheetId(sheetUrl);
+  const name = await loadSheetName();
+
+  sheetInput.value = name;
+  sheetInput.readOnly = true;
+  loadTabs();
 };
 
 tabs.onchange = loadData;

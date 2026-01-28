@@ -6,6 +6,7 @@
 
 <style>
 body { font-family: Arial; margin: 10px; }
+
 .sheet-bar { display: flex; gap: 6px; margin-bottom: 8px; }
 input { flex: 1; padding: 8px; font-size: 15px; }
 button { padding: 8px 10px; }
@@ -13,8 +14,35 @@ select { width: 100%; padding: 8px; margin-bottom: 8px; }
 
 .actions { display: flex; gap: 8px; margin-bottom: 8px; }
 
-td { border: 1px solid #ccc; padding: 8px; min-width: 80px; }
-td input { width: 100%; border: none; padding: 8px; }
+/* ===============================
+   CELL UI — DO NOT CHANGE (LOCKED)
+   =============================== */
+.table-wrap {
+  height: calc(100vh - 180px);
+  overflow: auto;
+  border: 1px solid #ddd;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+td {
+  border: 1px solid #ccc;
+  padding: 10px;
+  min-width: 90px;
+  font-size: 14px;
+}
+
+td input {
+  width: 100%;
+  border: none;
+  padding: 10px;
+  font-size: 14px;
+}
+/* =============================== */
+
 </style>
 </head>
 
@@ -32,11 +60,13 @@ td input { width: 100%; border: none; padding: 8px; }
   <button onclick="addColumn()">+ Column</button>
 </div>
 
-<table id="grid"></table>
+<div class="table-wrap">
+  <table id="grid"></table>
+</div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6KQcF2LsQR3q_xdDO4GR5M_weIYzrYvM8d1rD4Ep93SpuqZcwMNStGqhkdvPkBaj9/exec';
-const STORAGE_KEY = 'nkt_sheet_v21';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbytZYH_IetZXnLBtp6uVkK6wXN-1d3tnz1wwPDcbJ3Owo7ppkHRxJ1ntqCGdzcKdbuG/exec';
+const STORAGE_KEY = 'nkt_sheet_v22';
 
 const sheetInput = document.getElementById('sheetInput');
 const clearBtn = document.getElementById('clearBtn');
@@ -48,19 +78,16 @@ let sheetUrl = '';
 let currentTab = '';
 let editing = false;
 
-/* -------- Helpers -------- */
 function extractSheetId(url) {
   const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
   return m ? m[1] : '';
 }
 
-/* -------- Sheet Name -------- */
 async function loadSheetName() {
   const r = await fetch(`${SCRIPT_URL}?action=info&sheetId=${sheetId}`);
   return (await r.json()).name;
 }
 
-/* -------- Tabs -------- */
 async function loadTabs() {
   const r = await fetch(`${SCRIPT_URL}?action=tabs&sheetId=${sheetId}`);
   const data = await r.json();
@@ -72,16 +99,20 @@ async function loadTabs() {
   loadData();
 }
 
-/* -------- Data -------- */
 async function loadData() {
-  if (tabs.value === '__add__') return startInlineAddSheet();
+  if (tabs.value === '__add__') {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'addSheet', sheetId })
+    });
+    return loadTabs();
+  }
 
   currentTab = tabs.value;
   const r = await fetch(`${SCRIPT_URL}?action=data&sheetId=${sheetId}&tab=${currentTab}`);
   render((await r.json()).values);
 }
 
-/* -------- Render -------- */
 function render(values) {
   grid.innerHTML = '';
   values.forEach((r, ri) => {
@@ -96,7 +127,6 @@ function render(values) {
   });
 }
 
-/* -------- Inline Edit Cell -------- */
 function editCell(td, row, col) {
   if (editing) return;
   editing = true;
@@ -115,32 +145,17 @@ function editCell(td, row, col) {
         method: 'POST',
         body: JSON.stringify({
           action: 'updateCell',
-          sheetId, tab: currentTab,
-          row, col, value: input.value
+          sheetId,
+          tab: currentTab,
+          row,
+          col,
+          value: input.value
         })
       });
     }
   };
 }
 
-/* -------- Inline Add Sheet -------- */
-function startInlineAddSheet() {
-  tabs.selectedIndex = tabs.options.length - 1;
-  const name = prompt(''); // Mobile forces keyboard open
-
-  if (!name) return loadTabs();
-
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({
-      action: 'addSheet',
-      sheetId,
-      name
-    })
-  }).then(loadTabs);
-}
-
-/* -------- Row / Column -------- */
 function addRow() {
   fetch(SCRIPT_URL, {
     method: 'POST',
@@ -155,7 +170,6 @@ function addColumn() {
   }).then(loadData);
 }
 
-/* -------- Input -------- */
 sheetInput.onchange = async () => {
   sheetUrl = sheetInput.value;
   sheetId = extractSheetId(sheetUrl);
@@ -177,7 +191,6 @@ clearBtn.onclick = () => {
   tabs.innerHTML = '';
 };
 
-/* -------- Auto Load -------- */
 window.onload = async () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return;

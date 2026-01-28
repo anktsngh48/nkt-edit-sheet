@@ -55,7 +55,7 @@ select {
 table {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 1pt; /* 👈 cell gap */
+  border-spacing: 1pt; /* 👈 2pt GAP BETWEEN CELLS */
 }
 
 td {
@@ -108,7 +108,7 @@ let sheetUrl = '';
 let currentTab = '';
 let editing = false;
 
-/* Undo stack (single level) */
+/* Undo (single level) */
 let lastEdit = null;
 
 /* Helpers */
@@ -166,7 +166,10 @@ function render(values) {
   });
 }
 
-/* Inline edit */
+/* ===============================
+   INLINE CELL EDIT
+   Cursor placed at END of text
+   =============================== */
 function editCell(td, row, col) {
   if (editing) return;
   editing = true;
@@ -174,7 +177,12 @@ function editCell(td, row, col) {
   const old = td.textContent;
   td.innerHTML = `<input value="${old}">`;
   const input = td.firstChild;
+
   input.focus();
+
+  /* 👇 CURSOR AT END (KEY CHANGE) */
+  const len = input.value.length;
+  input.setSelectionRange(len, len);
 
   input.onblur = async () => {
     const val = input.value;

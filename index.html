@@ -168,7 +168,7 @@ function render(values) {
 
 /* ===============================
    INLINE CELL EDIT
-   Cursor placed at END of text
+   Cursor AND text scrolled to END
    =============================== */
 function editCell(td, row, col) {
   if (editing) return;
@@ -180,9 +180,12 @@ function editCell(td, row, col) {
 
   input.focus();
 
-  /* 👇 CURSOR AT END (KEY CHANGE) */
+  /* 👇 Place cursor at END */
   const len = input.value.length;
   input.setSelectionRange(len, len);
+
+  /* 👇 Ensure text scrolls so cursor is visible */
+  input.scrollLeft = input.scrollWidth;
 
   input.onblur = async () => {
     const val = input.value;

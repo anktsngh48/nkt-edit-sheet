@@ -5,56 +5,90 @@
 <title>NKT Data Manager</title>
 
 <style>
-body { font-family: Arial; margin: 10px; }
-
-.sheet-bar { display: flex; gap: 6px; margin-bottom: 8px; }
-input { flex: 1; padding: 8px; font-size: 15px; }
-button { padding: 8px 10px; }
-select { width: 100%; padding: 8px; margin-bottom: 8px; }
-
-.actions { display: flex; gap: 8px; margin-bottom: 8px; }
-
-/* =====================================================
-   CELL VISUALS — FINAL & LOCKED
-   Independent square cells with spacing between them
-   DO NOT MODIFY
-   ===================================================== */
-.table-wrap {
-  height: calc(100vh - 180px);
-  overflow: auto;
+/* ===============================
+   GLOBAL LAYOUT (DO NOT CHANGE)
+   =============================== */
+body {
+  font-family: Arial;
+  margin: 10px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-table {
+/* ===============================
+   HEADER CONTROLS
+   =============================== */
+.sheet-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+input {
+  flex: 1;
+  padding: 8px;
+  font-size: 15px;
+}
+
+button {
+  padding: 8px 10px;
+}
+
+select {
   width: 100%;
-  border-collapse: separate;     /* IMPORTANT */
-  border-spacing: 2px;           /* GAP BETWEEN CELLS */
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* ===============================
+   TABLE SCROLL AREA (IMPORTANT)
+   This makes ONLY the table scroll,
+   not the whole page
+   =============================== */
+.table-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+}
+
+/* ===============================
+   TABLE + CELL STYLING
+   ✨ THIS IS WHAT MAKES IT BEAUTIFUL ✨
+   Padding, spacing, and touch feel
+   DO NOT MODIFY BELOW
+   =============================== */
+table {
+  border-collapse: collapse;
+  width: 100%;
 }
 
 td {
-  border: 1px solid #cfcfcf;
-  padding: 12px;
-  min-width: 90px;
+  border: 1px solid #ccc;
+  padding: 12px;          /* 👈 CELL COMFORT */
+  min-width: 80px;
   font-size: 14px;
-  background: #fff;
 }
 
 td input {
   width: 100%;
   border: none;
-  padding: 12px;
+  padding: 12px;          /* 👈 EDIT FEEL */
   font-size: 14px;
-  background: transparent;
 }
-/* ===================================================== */
-
 </style>
 </head>
 
 <body>
 
 <div class="sheet-bar">
-  <input id="sheetInput" list="history" placeholder="Paste Google Sheet URL">
-  <datalist id="history"></datalist>
+  <input id="sheetInput" placeholder="Paste Google Sheet URL">
   <button id="clearBtn">✕</button>
 </div>
 
@@ -65,57 +99,38 @@ td input {
   <button onclick="addColumn()">+ Column</button>
 </div>
 
-<div class="table-wrap">
+<div class="table-wrapper">
   <table id="grid"></table>
 </div>
 
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwiUpzF6K_PSxri0I2V914rokezhEBBfJDhhbMA5r4E3aV_e-ZNl6uDVRKaI1dqzRKh/exec';
-
-const CURRENT_KEY = 'current_sheet';
-const HISTORY_KEY = 'sheet_history';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz6uhXs0C5zwlbHxdvoNB3B4VwAFe6Kzw6XFAgI5fDFjZpC9x2DoxdRZf7hfEyuhI8K/exec';
+const STORAGE_KEY = 'nkt_sheet_v22';
 
 const sheetInput = document.getElementById('sheetInput');
 const clearBtn = document.getElementById('clearBtn');
 const tabs = document.getElementById('tabs');
 const grid = document.getElementById('grid');
-const history = document.getElementById('history');
 
 let sheetId = '';
 let sheetUrl = '';
 let currentTab = '';
 let editing = false;
 
+/* Helpers */
 function extractSheetId(url) {
   const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
   return m ? m[1] : '';
 }
 
-/* -------- History -------- */
-function saveHistory(name, url) {
-  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-  h[name] = url;
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
-  renderHistory();
-}
-
-function renderHistory() {
-  history.innerHTML = '';
-  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-  Object.keys(h).forEach(name => {
-    const o = document.createElement('option');
-    o.value = name;
-    history.appendChild(o);
-  });
-}
-
-/* -------- Loaders -------- */
+/* Load sheet name */
 async function loadSheetName() {
   const r = await fetch(`${SCRIPT_URL}?action=info&sheetId=${sheetId}`);
   return (await r.json()).name;
 }
 
-async function loadTabs(selectTab = null) {
+/* Tabs */
+async function loadTabs() {
   const r = await fetch(`${SCRIPT_URL}?action=tabs&sheetId=${sheetId}`);
   const data = await r.json();
 
@@ -123,18 +138,17 @@ async function loadTabs(selectTab = null) {
   data.sheets.forEach(s => tabs.add(new Option(s, s)));
   tabs.add(new Option('+ Add new page', '__add__'));
 
-  tabs.value = selectTab || data.sheets[0];
   loadData();
 }
 
+/* Data */
 async function loadData() {
   if (tabs.value === '__add__') {
-    const r = await fetch(SCRIPT_URL, {
+    await fetch(SCRIPT_URL, {
       method: 'POST',
       body: JSON.stringify({ action: 'addSheet', sheetId })
     });
-    const res = await r.json();
-    return loadTabs(res.name);
+    return loadTabs();
   }
 
   currentTab = tabs.value;
@@ -142,7 +156,7 @@ async function loadData() {
   render((await r.json()).values);
 }
 
-/* -------- Render -------- */
+/* Render */
 function render(values) {
   grid.innerHTML = '';
   values.forEach((r, ri) => {
@@ -157,7 +171,7 @@ function render(values) {
   });
 }
 
-/* -------- Inline Edit -------- */
+/* Inline edit */
 function editCell(td, row, col) {
   if (editing) return;
   editing = true;
@@ -187,7 +201,7 @@ function editCell(td, row, col) {
   };
 }
 
-/* -------- Row / Column -------- */
+/* Row / Column */
 function addRow() {
   fetch(SCRIPT_URL, {
     method: 'POST',
@@ -202,34 +216,31 @@ function addColumn() {
   }).then(loadData);
 }
 
-/* -------- Input -------- */
+/* Input */
 sheetInput.onchange = async () => {
-  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-  sheetUrl = h[sheetInput.value] || sheetInput.value;
-
+  sheetUrl = sheetInput.value;
   sheetId = extractSheetId(sheetUrl);
-  if (!sheetId) return;
+  if (!sheetId) return alert('Invalid URL');
 
   const name = await loadSheetName();
   sheetInput.value = name;
   sheetInput.readOnly = true;
 
-  saveHistory(name, sheetUrl);
-  localStorage.setItem(CURRENT_KEY, sheetUrl);
+  localStorage.setItem(STORAGE_KEY, sheetUrl);
   loadTabs();
 };
 
 clearBtn.onclick = () => {
+  localStorage.removeItem(STORAGE_KEY);
   sheetInput.value = '';
   sheetInput.readOnly = false;
   grid.innerHTML = '';
   tabs.innerHTML = '';
 };
 
-/* -------- Auto Load Last Sheet -------- */
+/* Auto load */
 window.onload = async () => {
-  renderHistory();
-  const saved = localStorage.getItem(CURRENT_KEY);
+  const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return;
 
   sheetUrl = saved;

@@ -216,4 +216,63 @@ function editCell(td, row, col) {
 }
 
 /* ---------- Actions ---------- */
-function
+function addRow() {
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'addRow', sheetId, tab: currentTab })
+  }).then(loadData);
+}
+
+function addColumn() {
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({ action: 'addColumn', sheetId, tab: currentTab })
+  }).then(loadData);
+}
+
+/* ---------- Input ---------- */
+sheetInput.onchange = async () => {
+  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
+  sheetUrl = h[sheetInput.value] || sheetInput.value;
+
+  sheetId = extractSheetId(sheetUrl);
+  if (!sheetId) return;
+
+  const name = await loadSheetName();
+  sheetInput.value = name;
+  sheetInput.readOnly = true;
+
+  saveHistory(name, sheetUrl);
+  localStorage.setItem(CURRENT_KEY, sheetUrl);
+  loadTabs();
+};
+
+clearBtn.onclick = () => {
+  sheetInput.value = '';
+  sheetInput.readOnly = false;
+  grid.innerHTML = '';
+  tabs.innerHTML = '';
+  renderHistory();
+};
+
+/* ---------- Auto Load Last Sheet ---------- */
+window.onload = async () => {
+  renderHistory();
+
+  const saved = localStorage.getItem(CURRENT_KEY);
+  if (!saved) return;
+
+  sheetUrl = saved;
+  sheetId = extractSheetId(sheetUrl);
+  const name = await loadSheetName();
+
+  sheetInput.value = name;
+  sheetInput.readOnly = true;
+  loadTabs();
+};
+
+tabs.onchange = loadData;
+</script>
+
+</body>
+</html>

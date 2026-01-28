@@ -5,31 +5,61 @@
 <title>NKT Data Manager</title>
 
 <style>
-body { font-family: Arial; margin: 10px; }
+body {
+  font-family: Arial, sans-serif;
+  margin: 10px;
+}
 
-.sheet-bar { display: flex; gap: 6px; margin-bottom: 8px; }
-input { flex: 1; padding: 8px; font-size: 15px; }
-button { padding: 8px 10px; }
-select { width: 100%; padding: 8px; margin-bottom: 8px; }
+.sheet-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
 
-.actions { display: flex; gap: 8px; margin-bottom: 8px; }
+input {
+  flex: 1;
+  padding: 8px;
+  font-size: 15px;
+}
 
-/* =================================================
-   CELL UI — FINAL & LOCKED (RESTORED FROM V2.1)
-   DO NOT MODIFY IN FUTURE VERSIONS
-   ================================================= */
+button {
+  padding: 8px 10px;
+}
+
+select {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* =====================================================
+   CELL VISUALS — FINAL & LOCKED
+   - Independent square cells
+   - Visible gap between cells
+   - NO shared borders
+   DO NOT MODIFY
+   ===================================================== */
+
 .table-wrap {
   height: calc(100vh - 180px);
   overflow: auto;
 }
 
 table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 6px;   /* space BETWEEN cells */
   width: 100%;
 }
 
 td {
-  border: 1px solid #ccc;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
   padding: 10px;
   min-width: 90px;
   font-size: 14px;
@@ -38,10 +68,13 @@ td {
 td input {
   width: 100%;
   border: none;
-  padding: 10px;
+  outline: none;
+  padding: 0;
   font-size: 14px;
+  background: transparent;
 }
-/* ================================================= */
+
+/* ===================================================== */
 
 </style>
 </head>
@@ -67,7 +100,7 @@ td input {
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz3ygm24PsUB7-Y5MRwCEFV4OGFQaqCz-cfJxdwiIqhqjSVg3XMm2Gx-E5xPqlaork/exec';
-const STORAGE_KEY = 'nkt_current_sheet';
+const CURRENT_KEY = 'nkt_last_sheet';
 const HISTORY_KEY = 'nkt_sheet_history';
 
 const sheetInput = document.getElementById('sheetInput');
@@ -81,12 +114,13 @@ let sheetUrl = '';
 let currentTab = '';
 let editing = false;
 
+/* ---------- Helpers ---------- */
 function extractSheetId(url) {
   const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
   return m ? m[1] : '';
 }
 
-/* -------- History -------- */
+/* ---------- History ---------- */
 function saveHistory(name, url) {
   const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
   h[name] = url;
@@ -104,6 +138,7 @@ function renderHistory() {
   });
 }
 
+/* ---------- Sheet ---------- */
 async function loadSheetName() {
   const r = await fetch(`${SCRIPT_URL}?action=info&sheetId=${sheetId}`);
   return (await r.json()).name;
@@ -136,6 +171,7 @@ async function loadData() {
   render((await r.json()).values);
 }
 
+/* ---------- Grid ---------- */
 function render(values) {
   grid.innerHTML = '';
   values.forEach((r, ri) => {
@@ -168,7 +204,10 @@ function editCell(td, row, col) {
         method: 'POST',
         body: JSON.stringify({
           action: 'updateCell',
-          sheetId, tab: currentTab, row, col,
+          sheetId,
+          tab: currentTab,
+          row,
+          col,
           value: input.value
         })
       });
@@ -176,66 +215,5 @@ function editCell(td, row, col) {
   };
 }
 
-function addRow() {
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'addRow', sheetId, tab: currentTab })
-  }).then(loadData);
-}
-
-function addColumn() {
-  fetch(SCRIPT_URL, {
-    method: 'POST',
-    body: JSON.stringify({ action: 'addColumn', sheetId, tab: currentTab })
-  }).then(loadData);
-}
-
-/* -------- Input -------- */
-sheetInput.onchange = async () => {
-  const h = JSON.parse(localStorage.getItem(HISTORY_KEY) || '{}');
-  if (h[sheetInput.value]) {
-    sheetUrl = h[sheetInput.value];
-  } else {
-    sheetUrl = sheetInput.value;
-  }
-
-  sheetId = extractSheetId(sheetUrl);
-  if (!sheetId) return;
-
-  const name = await loadSheetName();
-  sheetInput.value = name;
-  sheetInput.readOnly = true;
-
-  saveHistory(name, sheetUrl);
-  localStorage.setItem(STORAGE_KEY, sheetUrl);
-  loadTabs();
-};
-
-clearBtn.onclick = () => {
-  localStorage.removeItem(STORAGE_KEY);
-  sheetInput.value = '';
-  sheetInput.readOnly = false;
-  grid.innerHTML = '';
-  tabs.innerHTML = '';
-  renderHistory();
-};
-
-window.onload = async () => {
-  renderHistory();
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) return;
-
-  sheetUrl = saved;
-  sheetId = extractSheetId(sheetUrl);
-  const name = await loadSheetName();
-
-  sheetInput.value = name;
-  sheetInput.readOnly = true;
-  loadTabs();
-};
-
-tabs.onchange = loadData;
-</script>
-
-</body>
-</html>
+/* ---------- Actions ---------- */
+function
